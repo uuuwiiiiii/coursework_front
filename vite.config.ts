@@ -8,7 +8,7 @@ export default defineConfig({
         TanStackRouter()
     ],
     server: {
-        port: 3000,
+        port: 3001,
         proxy: {
             '/api': {
                 target: 'http://localhost:8080',
