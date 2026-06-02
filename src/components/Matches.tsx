@@ -42,6 +42,7 @@ const Matches = () => {
                     const filterDate = dayjs(selectedDate).format("YYYY-MM-DD");
                     return matchDate === filterDate;
                 });
+                // eslint-disable-next-line react-hooks/set-state-in-effect
                 setFilteredMatches(filtered);
             } else {
                 setFilteredMatches(matches);
@@ -184,18 +185,18 @@ const MatchForm: FC<MatchFormProps> = ({ opened, onClose }) => {
         }
 
         const matchData = {
-            teamGuest: { id: selectedTeamGuest.id },
-            teamHost: { id: selectedTeamHost.id },
-            referee: { id: selectedReferee.id },
-            city: { id: selectedCity.id },
+            teamGuest: selectedTeamGuest,
+            teamHost: selectedTeamHost,
+            referee: selectedReferee,
+            city: selectedCity,
             stageType: values.stageType,
             phaseType: values.phaseType,
             guestCount: values.guestCount,
             hostCount: values.hostCount,
-            dateTime: formattedDateTime,
+            dateTime: values.dateTime,
         };
 
-        addMatch(matchData);
+        await addMatch(matchData);
         form.reset();
         onClose();
     };
@@ -459,10 +460,10 @@ const MatchEditForm: FC<MatchEditFormProps> = ({ opened, onClose, match }) => {
 
         const matchData = {
             id: match.id,
-            teamGuest: { id: selectedTeamGuest.id },
-            teamHost: { id: selectedTeamHost.id },
-            referee: { id: selectedReferee.id },
-            city: { id: selectedCity.id },
+            teamGuest: selectedTeamGuest,
+            teamHost: selectedTeamHost,
+            referee: selectedReferee,
+            city: selectedCity,
             stageType: values.stageType,
             phaseType: values.phaseType,
             guestCount: values.guestCount,
