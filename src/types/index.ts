@@ -16,7 +16,7 @@ export interface Team {
 export interface Referee {
 	id: number;
 	city: City;
-	FIO: string;
+	fio: string;
 	license: string;
 	stageYears: number;
 }
