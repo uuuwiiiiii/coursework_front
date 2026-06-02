@@ -1,23 +1,23 @@
 import {
-	queryOptions,
-	useMutation,
-	useQueryClient,
-	useSuspenseQuery,
+    queryOptions,
+    useMutation,
+    useQueryClient,
+    useSuspenseQuery,
 } from "@tanstack/react-query";
 import type { City } from "../types";
 import axios from "axios";
 
 export const citiesQueryOptions = queryOptions({
-	queryKey: ["cities"],
-	queryFn: async () => {
-		const { data } = await axios.get<City[]>("api/cities");
-		return data;
-	},
-	staleTime: Infinity,
+    queryKey: ["cities"],
+    queryFn: async () => {
+        const { data } = await axios.get<City[]>("api/cities");
+        return data;
+    },
+    staleTime: Infinity,
 });
 
 export const useCitiesQuery = () => {
-	return useSuspenseQuery(citiesQueryOptions);
+    return useSuspenseQuery(citiesQueryOptions);
 };
 
 export const useCityMutation = () => {
@@ -29,7 +29,11 @@ export const useCityMutation = () => {
             return data;
         },
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: citiesQueryOptions.queryKey });
+            // Инвалидируем все связанные сущности
+            queryClient.invalidateQueries({ queryKey: ["cities"] });
+            queryClient.invalidateQueries({ queryKey: ["teams"] });
+            queryClient.invalidateQueries({ queryKey: ["referees"] });
+            queryClient.invalidateQueries({ queryKey: ["matches"] });
         },
     });
 
@@ -39,7 +43,7 @@ export const useCityMutation = () => {
             return data;
         },
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: citiesQueryOptions.queryKey });
+            queryClient.invalidateQueries({ queryKey: ["cities"] });
         },
     });
 
@@ -49,7 +53,10 @@ export const useCityMutation = () => {
             return data;
         },
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: citiesQueryOptions.queryKey });
+            queryClient.invalidateQueries({ queryKey: ["cities"] });
+            queryClient.invalidateQueries({ queryKey: ["teams"] });
+            queryClient.invalidateQueries({ queryKey: ["referees"] });
+            queryClient.invalidateQueries({ queryKey: ["matches"] });
         },
     });
 

@@ -29,7 +29,8 @@ export const useTeamMutation = () => {
             return data;
         },
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: teamsQueryOptions.queryKey });
+            queryClient.invalidateQueries({ queryKey: ["teams"] });
+            queryClient.invalidateQueries({ queryKey: ["matches"] });
         },
     });
 
@@ -39,7 +40,7 @@ export const useTeamMutation = () => {
             return data;
         },
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: teamsQueryOptions.queryKey });
+            queryClient.invalidateQueries({ queryKey: ["teams"] });
         },
     });
 
@@ -49,7 +50,8 @@ export const useTeamMutation = () => {
             return data;
         },
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: teamsQueryOptions.queryKey });
+            queryClient.invalidateQueries({ queryKey: ["teams"] });
+            queryClient.invalidateQueries({ queryKey: ["matches"] });
         },
     });
 

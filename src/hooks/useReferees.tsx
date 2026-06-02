@@ -29,9 +29,8 @@ export const useRefereeMutation = () => {
             return data;
         },
         onSuccess: () => {
-            queryClient.invalidateQueries({
-                queryKey: refereesQueryOptions.queryKey,
-            });
+            queryClient.invalidateQueries({ queryKey: ["referees"] });
+            queryClient.invalidateQueries({ queryKey: ["matches"] });
         },
     });
 
@@ -41,9 +40,7 @@ export const useRefereeMutation = () => {
             return data;
         },
         onSuccess: () => {
-            queryClient.invalidateQueries({
-                queryKey: refereesQueryOptions.queryKey,
-            });
+            queryClient.invalidateQueries({ queryKey: ["referees"] });
         },
     });
 
@@ -53,14 +50,8 @@ export const useRefereeMutation = () => {
             return data;
         },
         onSuccess: () => {
-            queryClient.invalidateQueries({
-                queryKey: refereesQueryOptions.queryKey,
-            });
-        },
-        onSettled: () => {
-            queryClient.refetchQueries({
-                queryKey: refereesQueryOptions.queryKey,
-            });
+            queryClient.invalidateQueries({ queryKey: ["referees"] });
+            queryClient.invalidateQueries({ queryKey: ["matches"] });
         },
     });
 

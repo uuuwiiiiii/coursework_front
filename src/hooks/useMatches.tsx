@@ -29,7 +29,8 @@ export const useMatchMutation = () => {
             return data;
         },
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: matchesQueryOptions.queryKey });
+            queryClient.invalidateQueries({ queryKey: ["matches"] });
+            queryClient.invalidateQueries({ queryKey: ["teams"] });
         },
     });
 
@@ -39,7 +40,8 @@ export const useMatchMutation = () => {
             return data;
         },
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: matchesQueryOptions.queryKey });
+            queryClient.invalidateQueries({ queryKey: ["matches"] });
+            queryClient.invalidateQueries({ queryKey: ["teams"] });
         },
     });
 
@@ -49,7 +51,8 @@ export const useMatchMutation = () => {
             return data;
         },
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: matchesQueryOptions.queryKey });
+            queryClient.invalidateQueries({ queryKey: ["matches"] });
+            queryClient.invalidateQueries({ queryKey: ["teams"] });
         },
     });
 
