@@ -146,14 +146,19 @@ const CityEditForm: FC<CityEditFormProps> = ({ opened, onClose, city }) => {
 
     const handleSubmit = async (values: { name: string; country: string }) => {
         if (!city) return;
-        
-        updateCity({
-            id: city.id,
-            name: values.name,
-            country: values.country,
-        });
-        form.reset();
-        onClose();
+
+        try {
+            await updateCity({
+                id: city.id,
+                name: values.name,
+                country: values.country,
+            });
+            form.reset();
+            onClose();
+        } catch (error) {
+            console.error("Ошибка при обновлении города:", error);
+            alert("Произошла ошибка при сохранении города");
+        }
     };
 
     return (

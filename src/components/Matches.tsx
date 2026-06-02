@@ -172,6 +172,11 @@ const MatchForm: FC<MatchFormProps> = ({ opened, onClose }) => {
             alert(`❌ Судья ${selectedReferee.fio} проживает в городе ${selectedReferee.city?.name}, где играет команда-гость (${selectedTeamGuest.name})!`);
             return;
         }
+        if (selectedReferee.city?.id === selectedCity?.id) {
+            alert(`❌ Судья ${selectedReferee.fio} проживает в городе ${selectedReferee.city?.name}, где играет команда-гость (${selectedTeamGuest.name})!`);
+            return;
+        }
+
 
         let formattedDateTime = values.dateTime;
         if (formattedDateTime && !formattedDateTime.includes('T')) {
@@ -447,6 +452,11 @@ const MatchEditForm: FC<MatchEditFormProps> = ({ opened, onClose, match }) => {
             return;
         }
 
+        if (selectedReferee.city?.id === selectedCity?.id) {
+            alert(`❌ Судья ${selectedReferee.fio} проживает в городе ${selectedReferee.city?.name}, где играет команда-гость (${selectedTeamGuest.name})!`);
+            return;
+        }
+
         const matchData = {
             id: match.id,
             teamGuest: { id: selectedTeamGuest.id },
@@ -460,9 +470,14 @@ const MatchEditForm: FC<MatchEditFormProps> = ({ opened, onClose, match }) => {
             dateTime: values.dateTime,
         };
 
-        await updateMatch(matchData);
-        form.reset();
-        onClose();
+        try {
+            await updateMatch(matchData);
+            form.reset();
+            onClose();
+        } catch (error) {
+            console.error("Ошибка при обновлении матча:", error);
+            alert("Произошла ошибка при сохранении матча");
+        }
     };
 
     return (
