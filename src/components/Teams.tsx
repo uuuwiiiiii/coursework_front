@@ -16,17 +16,14 @@ import {
 import { useForm } from "@mantine/form";
 import { useTeamMutation, useTeamsQuery } from "../hooks/useTeams";
 import { useCitiesQuery } from "../hooks/useCities";
-import { useAuth } from "../context/AuthContext.tsx";
+import { useAuth } from "../context/AuthContext";
 import "@mantine/core/styles.css";
 
 const Teams = () => {
     const { data: teams } = useTeamsQuery();
     const [modalOpened, setModalOpened] = useState(false);
+    const [editingTeam, setEditingTeam] = useState<Team | null>(null);
     const { isAuthenticated, isAdmin } = useAuth();
-
-    const handleCloseModal = () => {
-        setModalOpened(false);
-    };
 
     return (
         <div>
@@ -34,29 +31,30 @@ const Teams = () => {
                 <h1>Команды</h1>
                 <Group>
                     {isAuthenticated && (
-                        <Button 
-                            variant="outline" 
-                            onClick={() => exportTeamsToCSV(teams || [])}
-                        >
+                        <Button variant="outline" onClick={() => exportTeamsToCSV(teams || [])}>
                             Сохранить CSV
                         </Button>
                     )}
                     {isAdmin && (
-                        <Button onClick={() => setModalOpened(true)}>
-                            Добавить
-                        </Button>
+                        <Button onClick={() => setModalOpened(true)}>Добавить</Button>
                     )}
                 </Group>
             </Group>
             <Stack gap="md" mt="xl">
                 {teams?.map((team) => (
-                    <Team key={team.id} team={team} isAdmin={isAdmin} />
+                    <TeamCard key={team.id} team={team} isAdmin={isAdmin} onEdit={setEditingTeam} />
                 ))}
             </Stack>
 
             {isAdmin && (
-                <TeamForm opened={modalOpened} onClose={handleCloseModal} />
+                <TeamForm opened={modalOpened} onClose={() => setModalOpened(false)} />
             )}
+
+            <TeamEditForm
+                opened={!!editingTeam}
+                onClose={() => setEditingTeam(null)}
+                team={editingTeam}
+            />
         </div>
     );
 };
@@ -69,7 +67,6 @@ type TeamFormProps = {
 const TeamForm: FC<TeamFormProps> = ({ opened, onClose }) => {
     const { addTeam, isAdding } = useTeamMutation();
     const { data: cities } = useCitiesQuery();
-
     const form = useForm({
         initialValues: {
             name: "",
@@ -100,7 +97,7 @@ const TeamForm: FC<TeamFormProps> = ({ opened, onClose }) => {
             city: selectedCity,
         };
 
-        addTeam(teamData);
+        await addTeam(teamData);
         form.reset();
         onClose();
     };
@@ -115,38 +112,13 @@ const TeamForm: FC<TeamFormProps> = ({ opened, onClose }) => {
         <Modal opened={opened} onClose={onClose} title="Добавить новую команду" size="lg" centered>
             <form onSubmit={form.onSubmit(handleSubmit)}>
                 <Stack gap="md">
-                    <TextInput
-                        label="Название команды"
-                        placeholder="Введите название команды"
-                        {...form.getInputProps("name")}
-                        required
-                    />
-                    <NumberInput
-                        label="Количество игроков"
-                        min={1}
-                        {...form.getInputProps("peoplesInTeam")}
-                        required
-                    />
-                    <NumberInput
-                        label="Количество побед"
-                        min={0}
-                        {...form.getInputProps("numOfWin")}
-                        required
-                    />
-                    <Select
-                        label="Город"
-                        placeholder="Выберите город"
-                        data={cityOptions}
-                        {...form.getInputProps("cityId")}
-                        required
-                    />
+                    <TextInput label="Название команды" placeholder="Введите название команды" {...form.getInputProps("name")} required />
+                    <NumberInput label="Количество игроков" min={1} {...form.getInputProps("peoplesInTeam")} required />
+                    <NumberInput label="Количество побед" min={0} {...form.getInputProps("numOfWin")} required />
+                    <Select label="Город" placeholder="Выберите город" data={cityOptions} {...form.getInputProps("cityId")} required />
                     <Group justify="flex-end" mt="md">
-                        <Button variant="light" onClick={onClose}>
-                            Отмена
-                        </Button>
-                        <Button type="submit" loading={isAdding}>
-                            Добавить команду
-                        </Button>
+                        <Button variant="light" onClick={onClose}>Отмена</Button>
+                        <Button type="submit" loading={isAdding}>Добавить команду</Button>
                     </Group>
                 </Stack>
             </form>
@@ -163,13 +135,12 @@ type TeamEditFormProps = {
 const TeamEditForm: FC<TeamEditFormProps> = ({ opened, onClose, team }) => {
     const { updateTeam, isUpdating } = useTeamMutation();
     const { data: cities } = useCitiesQuery();
-
     const form = useForm({
         initialValues: {
-            name: team?.name || "",
-            peoplesInTeam: team?.peoplesInTeam || 0,
-            numOfWin: team?.numOfWin || 0,
-            cityId: team?.city?.id || null,
+            name: "",
+            peoplesInTeam: 0,
+            numOfWin: 0,
+            cityId: null as number | null,
         },
         validate: {
             name: (value) => (value.trim().length === 0 ? "Введите название команды" : null),
@@ -180,7 +151,7 @@ const TeamEditForm: FC<TeamEditFormProps> = ({ opened, onClose, team }) => {
     });
 
     useEffect(() => {
-        if (team) {
+        if (team && opened) {
             form.setValues({
                 name: team.name,
                 peoplesInTeam: team.peoplesInTeam,
@@ -188,11 +159,11 @@ const TeamEditForm: FC<TeamEditFormProps> = ({ opened, onClose, team }) => {
                 cityId: team.city?.id || null,
             });
         }
-    }, [team]);
+    }, [team, opened]);
 
     const handleSubmit = async (values: typeof form.values) => {
         if (!team) return;
-        
+
         const cityId = typeof values.cityId === "string" ? parseInt(values.cityId) : values.cityId;
         const selectedCity = cities?.find((city) => city.id === cityId);
         if (!selectedCity) {
@@ -226,37 +197,13 @@ const TeamEditForm: FC<TeamEditFormProps> = ({ opened, onClose, team }) => {
         <Modal opened={opened} onClose={onClose} title="Редактировать команду" size="lg" centered>
             <form onSubmit={form.onSubmit(handleSubmit)}>
                 <Stack gap="md">
-                    <TextInput
-                        label="Название команды"
-                        {...form.getInputProps("name")}
-                        required
-                    />
-                    <NumberInput
-                        label="Количество игроков"
-                        min={1}
-                        {...form.getInputProps("peoplesInTeam")}
-                        required
-                    />
-                    <NumberInput
-                        label="Количество побед"
-                        min={0}
-                        {...form.getInputProps("numOfWin")}
-                        required
-                    />
-                    <Select
-                        label="Город"
-                        placeholder="Выберите город"
-                        data={cityOptions}
-                        {...form.getInputProps("cityId")}
-                        required
-                    />
+                    <TextInput label="Название команды" {...form.getInputProps("name")} required />
+                    <NumberInput label="Количество игроков" min={1} {...form.getInputProps("peoplesInTeam")} required />
+                    <NumberInput label="Количество побед" min={0} {...form.getInputProps("numOfWin")} required />
+                    <Select label="Город" placeholder="Выберите город" data={cityOptions} {...form.getInputProps("cityId")} required />
                     <Group justify="flex-end" mt="md">
-                        <Button variant="light" onClick={onClose}>
-                            Отмена
-                        </Button>
-                        <Button type="submit" loading={isUpdating}>
-                            Сохранить изменения
-                        </Button>
+                        <Button variant="light" onClick={onClose}>Отмена</Button>
+                        <Button type="submit" loading={isUpdating}>Сохранить изменения</Button>
                     </Group>
                 </Stack>
             </form>
@@ -264,15 +211,14 @@ const TeamEditForm: FC<TeamEditFormProps> = ({ opened, onClose, team }) => {
     );
 };
 
-type TeamProps = {
+type TeamCardProps = {
     team: Team;
     isAdmin: boolean;
+    onEdit: (team: Team) => void;
 };
 
-const Team: FC<TeamProps> = ({ team, isAdmin }) => {
+const TeamCard: FC<TeamCardProps> = ({ team, isAdmin, onEdit }) => {
     const { deleteTeam, isDeleting } = useTeamMutation();
-    const [editModalOpened, setEditModalOpened] = useState(false);
-
     const handleDelete = () => {
         if (confirm(`Удалить команду ${team.name}?`)) {
             deleteTeam(team.id);
@@ -280,45 +226,26 @@ const Team: FC<TeamProps> = ({ team, isAdmin }) => {
     };
 
     return (
-        <>
-            <Card withBorder padding="lg" radius="md">
-                <CardSection inheritPadding py="xs">
-                    <Group justify="space-between">
-                        <Text fw={500} size="lg">
-                            {team.name}
-                        </Text>
-                    </Group>
-                </CardSection>
-                <CardSection inheritPadding py="xs">
-                    <Stack gap="xs">
-                        <Text size="sm">
-                            <strong>Город:</strong> {team.city?.name} ({team.city?.country})
-                        </Text>
-                        <Text size="sm">
-                            <strong>Количество игроков:</strong> {team.peoplesInTeam}
-                        </Text>
-                        <Text size="sm">
-                            <strong>Количество побед:</strong> {team.numOfWin}
-                        </Text>
-                    </Stack>
-                </CardSection>
-                {isAdmin && (
-                    <Group justify="flex-end" mt="md">
-                        <Button variant="light" onClick={() => setEditModalOpened(true)}>
-                            Редактировать
-                        </Button>
-                        <Button onClick={handleDelete} loading={isDeleting}>
-                            Удалить
-                        </Button>
-                    </Group>
-                )}
-            </Card>
-            <TeamEditForm
-                opened={editModalOpened}
-                onClose={() => setEditModalOpened(false)}
-                team={team}
-            />
-        </>
+        <Card withBorder padding="lg" radius="md">
+            <CardSection inheritPadding py="xs">
+                <Group justify="space-between">
+                    <Text fw={500} size="lg">{team.name}</Text>
+                </Group>
+            </CardSection>
+            <CardSection inheritPadding py="xs">
+                <Stack gap="xs">
+                    <Text size="sm"><strong>Город:</strong> {team.city?.name} ({team.city?.country})</Text>
+                    <Text size="sm"><strong>Количество игроков:</strong> {team.peoplesInTeam}</Text>
+                    <Text size="sm"><strong>Количество побед:</strong> {team.numOfWin}</Text>
+                </Stack>
+            </CardSection>
+            {isAdmin && (
+                <Group justify="flex-end" mt="md">
+                    <Button variant="light" onClick={() => onEdit(team)}>Редактировать</Button>
+                    <Button onClick={handleDelete} loading={isDeleting}>Удалить</Button>
+                </Group>
+            )}
+        </Card>
     );
 };
 

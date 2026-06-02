@@ -222,7 +222,7 @@ const BracketComponent: FC<BracketProps> = ({ matches }) => {
                 .bracket-wrapper {
                     display: flex;
                     flex-direction: row;
-                    justify-content: center;
+                    justify-content: flex-start;
                     align-items: stretch;
                     gap: 50px;
                     overflow-x: auto;

@@ -1,33 +1,18 @@
-import { type FC, useState, useEffect } from "react";
-import { exportRefereesToCSV } from "../hooks/useExport";
-import type { City, Referee } from "../types";
-import {
-    Badge,
-    Button,
-    Card,
-    CardSection,
-    Group,
-    Modal,
-    NumberInput,
-    Select,
-    Stack,
-    Text,
-    TextInput,
-} from "@mantine/core";
-import { useForm } from "@mantine/form";
-import { useRefereeMutation, useRefereesQuery } from "../hooks/useReferees";
-import { useCitiesQuery } from "../hooks/useCities";
-import { useAuth } from "../context/AuthContext.tsx";
+import {type FC, useEffect, useState} from "react";
+import {exportRefereesToCSV} from "../hooks/useExport";
+import type {City, Referee} from "../types";
+import {Button, Card, CardSection, Group, Modal, NumberInput, Select, Stack, Text, TextInput,} from "@mantine/core";
+import {useForm} from "@mantine/form";
+import {useRefereeMutation, useRefereesQuery} from "../hooks/useReferees";
+import {useCitiesQuery} from "../hooks/useCities";
+import {useAuth} from "../context/AuthContext";
 import "@mantine/core/styles.css";
 
 const Referees = () => {
-    const { data: referees } = useRefereesQuery();
+    const {data: referees} = useRefereesQuery();
     const [modalOpened, setModalOpened] = useState(false);
-    const { isAuthenticated, isAdmin } = useAuth();
-
-    const handleCloseModal = () => {
-        setModalOpened(false);
-    };
+    const [editingReferee, setEditingReferee] = useState<Referee | null>(null);
+    const {isAuthenticated, isAdmin} = useAuth();
 
     return (
         <div>
@@ -35,29 +20,30 @@ const Referees = () => {
                 <h1>Судьи</h1>
                 <Group>
                     {isAuthenticated && (
-                        <Button 
-                            variant="outline" 
-                            onClick={() => exportRefereesToCSV(referees || [])}
-                        >
+                        <Button variant="outline" onClick={() => exportRefereesToCSV(referees || [])}>
                             Сохранить CSV
                         </Button>
                     )}
                     {isAdmin && (
-                        <Button onClick={() => setModalOpened(true)}>
-                            Добавить
-                        </Button>
+                        <Button onClick={() => setModalOpened(true)}>Добавить</Button>
                     )}
                 </Group>
             </Group>
             <Stack gap="md" mt="xl">
                 {referees?.map((referee) => (
-                    <Referee key={referee.id} referee={referee} isAdmin={isAdmin} />
+                    <RefereeCard key={referee.id} referee={referee} isAdmin={isAdmin} onEdit={setEditingReferee}/>
                 ))}
             </Stack>
 
             {isAdmin && (
-                <RefereeForm opened={modalOpened} onClose={handleCloseModal} />
+                <RefereeForm opened={modalOpened} onClose={() => setModalOpened(false)}/>
             )}
+
+            <RefereeEditForm
+                opened={!!editingReferee}
+                onClose={() => setEditingReferee(null)}
+                referee={editingReferee}
+            />
         </div>
     );
 };
@@ -67,10 +53,9 @@ type RefereeFormProps = {
     onClose: () => void;
 };
 
-const RefereeForm: FC<RefereeFormProps> = ({ opened, onClose }) => {
-    const { addReferee, isAdding } = useRefereeMutation();
-    const { data: cities } = useCitiesQuery();
-
+const RefereeForm: FC<RefereeFormProps> = ({opened, onClose}) => {
+    const {addReferee, isAdding} = useRefereeMutation();
+    const {data: cities} = useCitiesQuery();
     const form = useForm({
         initialValues: {
             fio: "",
@@ -101,7 +86,7 @@ const RefereeForm: FC<RefereeFormProps> = ({ opened, onClose }) => {
             city: selectedCity,
         };
 
-        addReferee(refereeData);
+        await addReferee(refereeData);
         form.reset();
         onClose();
     };
@@ -116,38 +101,16 @@ const RefereeForm: FC<RefereeFormProps> = ({ opened, onClose }) => {
         <Modal opened={opened} onClose={onClose} title="Добавить нового судью" size="lg" centered>
             <form onSubmit={form.onSubmit(handleSubmit)}>
                 <Stack gap="md">
-                    <TextInput
-                        label="ФИО судьи"
-                        placeholder="Иванов Иван Иванович"
-                        {...form.getInputProps("fio")}
-                        required
-                    />
-                    <TextInput
-                        label="Номер лицензии"
-                        placeholder="Введите номер лицензии"
-                        {...form.getInputProps("license")}
-                        required
-                    />
-                    <NumberInput
-                        label="Стаж работы (лет)"
-                        min={0}
-                        {...form.getInputProps("stageYears")}
-                        required
-                    />
-                    <Select
-                        label="Город"
-                        placeholder="Выберите город"
-                        data={cityOptions}
-                        {...form.getInputProps("cityId")}
-                        required
-                    />
+                    <TextInput label="ФИО судьи" placeholder="Иванов Иван Иванович" {...form.getInputProps("fio")}
+                               required/>
+                    <TextInput label="Номер лицензии"
+                               placeholder="Введите номер лицензии" {...form.getInputProps("license")} required/>
+                    <NumberInput label="Стаж работы (лет)" min={0} {...form.getInputProps("stageYears")} required/>
+                    <Select label="Город" placeholder="Выберите город"
+                            data={cityOptions} {...form.getInputProps("cityId")} required/>
                     <Group justify="flex-end" mt="md">
-                        <Button variant="light" onClick={onClose}>
-                            Отмена
-                        </Button>
-                        <Button type="submit" loading={isAdding}>
-                            Добавить судью
-                        </Button>
+                        <Button variant="light" onClick={onClose}>Отмена</Button>
+                        <Button type="submit" loading={isAdding}>Добавить судью</Button>
                     </Group>
                 </Stack>
             </form>
@@ -161,16 +124,15 @@ type RefereeEditFormProps = {
     referee: Referee | null;
 };
 
-const RefereeEditForm: FC<RefereeEditFormProps> = ({ opened, onClose, referee }) => {
-    const { updateReferee, isUpdating } = useRefereeMutation();
-    const { data: cities } = useCitiesQuery();
-
+const RefereeEditForm: FC<RefereeEditFormProps> = ({opened, onClose, referee}) => {
+    const {updateReferee, isUpdating} = useRefereeMutation();
+    const {data: cities} = useCitiesQuery();
     const form = useForm({
         initialValues: {
-            fio: referee?.fio || "",
-            license: referee?.license || "",
-            stageYears: referee?.stageYears || 0,
-            cityId: referee?.city?.id || null,
+            fio: "",
+            license: "",
+            stageYears: 0,
+            cityId: null as number | null,
         },
         validate: {
             fio: (value) => (value.trim().length === 0 ? "Введите ФИО судьи" : null),
@@ -181,7 +143,7 @@ const RefereeEditForm: FC<RefereeEditFormProps> = ({ opened, onClose, referee })
     });
 
     useEffect(() => {
-        if (referee) {
+        if (referee && opened) {
             form.setValues({
                 fio: referee.fio,
                 license: referee.license,
@@ -189,11 +151,11 @@ const RefereeEditForm: FC<RefereeEditFormProps> = ({ opened, onClose, referee })
                 cityId: referee.city?.id || null,
             });
         }
-    }, [referee]);
+    }, [referee, opened]);
 
     const handleSubmit = async (values: typeof form.values) => {
         if (!referee) return;
-        
+
         const cityId = typeof values.cityId === "string" ? parseInt(values.cityId) : values.cityId;
         const selectedCity = cities?.find((city) => city.id === cityId);
         if (!selectedCity) {
@@ -227,36 +189,14 @@ const RefereeEditForm: FC<RefereeEditFormProps> = ({ opened, onClose, referee })
         <Modal opened={opened} onClose={onClose} title="Редактировать судью" size="lg" centered>
             <form onSubmit={form.onSubmit(handleSubmit)}>
                 <Stack gap="md">
-                    <TextInput
-                        label="ФИО судьи"
-                        {...form.getInputProps("fio")}
-                        required
-                    />
-                    <TextInput
-                        label="Номер лицензии"
-                        {...form.getInputProps("license")}
-                        required
-                    />
-                    <NumberInput
-                        label="Стаж работы (лет)"
-                        min={0}
-                        {...form.getInputProps("stageYears")}
-                        required
-                    />
-                    <Select
-                        label="Город"
-                        placeholder="Выберите город"
-                        data={cityOptions}
-                        {...form.getInputProps("cityId")}
-                        required
-                    />
+                    <TextInput label="ФИО судьи" {...form.getInputProps("fio")} required/>
+                    <TextInput label="Номер лицензии" {...form.getInputProps("license")} required/>
+                    <NumberInput label="Стаж работы (лет)" min={0} {...form.getInputProps("stageYears")} required/>
+                    <Select label="Город" placeholder="Выберите город"
+                            data={cityOptions} {...form.getInputProps("cityId")} required/>
                     <Group justify="flex-end" mt="md">
-                        <Button variant="light" onClick={onClose}>
-                            Отмена
-                        </Button>
-                        <Button type="submit" loading={isUpdating}>
-                            Сохранить изменения
-                        </Button>
+                        <Button variant="light" onClick={onClose}>Отмена</Button>
+                        <Button type="submit" loading={isUpdating}>Сохранить изменения</Button>
                     </Group>
                 </Stack>
             </form>
@@ -264,15 +204,14 @@ const RefereeEditForm: FC<RefereeEditFormProps> = ({ opened, onClose, referee })
     );
 };
 
-type RefereeProps = {
+type RefereeCardProps = {
     referee: Referee;
     isAdmin: boolean;
+    onEdit: (referee: Referee) => void;
 };
 
-const Referee: FC<RefereeProps> = ({ referee, isAdmin }) => {
-    const { deleteReferee, isDeleting } = useRefereeMutation();
-    const [editModalOpened, setEditModalOpened] = useState(false);
-
+const RefereeCard: FC<RefereeCardProps> = ({referee, isAdmin, onEdit}) => {
+    const {deleteReferee, isDeleting} = useRefereeMutation();
     const handleDelete = () => {
         if (confirm(`Удалить судью ${referee.fio}?`)) {
             deleteReferee(referee.id);
@@ -296,45 +235,27 @@ const Referee: FC<RefereeProps> = ({ referee, isAdmin }) => {
     }
 
     return (
-        <>
-            <Card withBorder padding="lg" radius="md">
-                <CardSection inheritPadding py="xs">
-                    <Group justify="space-between">
-                        <Text fw={500} size="lg">
-                            {referee.fio}
-                        </Text>
-                    </Group>
-                </CardSection>
-                <CardSection inheritPadding py="xs">
-                    <Stack gap="xs">
-                        <Text size="sm">
-                            <strong>Лицензия:</strong> {referee.license}
-                        </Text>
-                        <Text size="sm">
-                            <strong>Стаж:</strong> {referee.stageYears} {getYearsWord(referee.stageYears)}
-                        </Text>
-                        <Text size="sm">
-                            <strong>Город:</strong> {referee.city?.name} ({referee.city?.country})
-                        </Text>
-                    </Stack>
-                </CardSection>
-                {isAdmin && (
-                    <Group justify="flex-end" mt="md">
-                        <Button variant="light" onClick={() => setEditModalOpened(true)}>
-                            Редактировать
-                        </Button>
-                        <Button onClick={handleDelete} loading={isDeleting}>
-                            Удалить
-                        </Button>
-                    </Group>
-                )}
-            </Card>
-            <RefereeEditForm
-                opened={editModalOpened}
-                onClose={() => setEditModalOpened(false)}
-                referee={referee}
-            />
-        </>
+        <Card withBorder padding="lg" radius="md">
+            <CardSection inheritPadding py="xs">
+                <Group justify="space-between">
+                    <Text fw={500} size="lg">{referee.fio}</Text>
+                </Group>
+            </CardSection>
+            <CardSection inheritPadding py="xs">
+                <Stack gap="xs">
+                    <Text size="sm"><strong>Лицензия:</strong> {referee.license}</Text>
+                    <Text size="sm"><strong>Стаж:</strong> {referee.stageYears} {getYearsWord(referee.stageYears)}
+                    </Text>
+                    <Text size="sm"><strong>Город:</strong> {referee.city?.name} ({referee.city?.country})</Text>
+                </Stack>
+            </CardSection>
+            {isAdmin && (
+                <Group justify="flex-end" mt="md">
+                    <Button variant="light" onClick={() => onEdit(referee)}>Редактировать</Button>
+                    <Button onClick={handleDelete} loading={isDeleting}>Удалить</Button>
+                </Group>
+            )}
+        </Card>
     );
 };
 

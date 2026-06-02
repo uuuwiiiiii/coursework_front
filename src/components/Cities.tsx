@@ -14,11 +14,12 @@ import {
 import { useCitiesQuery, useCityMutation } from "../hooks/useCities";
 import { useForm } from "@mantine/form";
 import "@mantine/core/styles.css";
-import { useAuth } from "../context/AuthContext.tsx";
+import { useAuth } from "../context/AuthContext";
 
 const Cities = () => {
     const { data: cities } = useCitiesQuery();
     const [modalOpened, setModalOpened] = useState(false);
+    const [editingCity, setEditingCity] = useState<City | null>(null);
     const { isAuthenticated, isAdmin } = useAuth();
 
     return (
@@ -27,29 +28,30 @@ const Cities = () => {
                 <h1>Города</h1>
                 <Group>
                     {isAuthenticated && (
-                        <Button 
-                            variant="outline" 
-                            onClick={() => exportCitiesToCSV(cities || [])}
-                        >
+                        <Button variant="outline" onClick={() => exportCitiesToCSV(cities || [])}>
                             Сохранить CSV
                         </Button>
                     )}
                     {isAdmin && (
-                        <Button onClick={() => setModalOpened(true)}>
-                            Добавить
-                        </Button>
+                        <Button onClick={() => setModalOpened(true)}>Добавить</Button>
                     )}
                 </Group>
             </Group>
             <Stack gap="md" mt="xl">
                 {cities?.map((city) => (
-                    <City key={city.id} city={city} isAdmin={isAdmin} />
+                    <CityCard key={city.id} city={city} isAdmin={isAdmin} onEdit={setEditingCity} />
                 ))}
             </Stack>
 
             {isAdmin && (
                 <CityAddForm opened={modalOpened} onClose={() => setModalOpened(false)} />
             )}
+
+            <CityEditForm
+                opened={!!editingCity}
+                onClose={() => setEditingCity(null)}
+                city={editingCity}
+            />
         </div>
     );
 };
@@ -61,53 +63,32 @@ type CityAddFormProps = {
 
 const CityAddForm: FC<CityAddFormProps> = ({ opened, onClose }) => {
     const { addCity, isAdding } = useCityMutation();
-
     const form = useForm({
         initialValues: {
             name: "",
             country: "",
         },
         validate: {
-            name: (value) =>
-                value.trim().length === 0 ? "Введите название города" : null,
+            name: (value) => (value.trim().length === 0 ? "Введите название города" : null),
             country: (value) => (value.trim().length === 0 ? "Введите страну" : null),
         },
     });
 
     const handleSubmit = async (values: { name: string; country: string }) => {
-        addCity(values);
+        await addCity(values);
         form.reset();
         onClose();
     };
 
     return (
-        <Modal
-            opened={opened}
-            onClose={onClose}
-            title="Добавить новый город"
-            centered
-        >
+        <Modal opened={opened} onClose={onClose} title="Добавить новый город" centered>
             <form onSubmit={form.onSubmit(handleSubmit)}>
                 <Stack gap="md">
-                    <TextInput
-                        label="Название города"
-                        placeholder="Введите название города"
-                        {...form.getInputProps("name")}
-                        required
-                    />
-                    <TextInput
-                        label="Страна"
-                        placeholder="Введите название страны"
-                        {...form.getInputProps("country")}
-                        required
-                    />
+                    <TextInput label="Название города" placeholder="Введите название города" {...form.getInputProps("name")} required />
+                    <TextInput label="Страна" placeholder="Введите название страны" {...form.getInputProps("country")} required />
                     <Group justify="flex-end" mt="md">
-                        <Button variant="light" onClick={onClose}>
-                            Отмена
-                        </Button>
-                        <Button type="submit" loading={isAdding}>
-                            Добавить город
-                        </Button>
+                        <Button variant="light" onClick={onClose}>Отмена</Button>
+                        <Button type="submit" loading={isAdding}>Добавить город</Button>
                     </Group>
                 </Stack>
             </form>
@@ -123,11 +104,10 @@ type CityEditFormProps = {
 
 const CityEditForm: FC<CityEditFormProps> = ({ opened, onClose, city }) => {
     const { updateCity, isUpdating } = useCityMutation();
-
     const form = useForm({
         initialValues: {
-            name: city?.name || "",
-            country: city?.country || "",
+            name: "",
+            country: "",
         },
         validate: {
             name: (value) => (value.trim().length === 0 ? "Введите название города" : null),
@@ -136,13 +116,13 @@ const CityEditForm: FC<CityEditFormProps> = ({ opened, onClose, city }) => {
     });
 
     useEffect(() => {
-        if (city) {
+        if (city && opened) {
             form.setValues({
                 name: city.name,
                 country: city.country,
             });
         }
-    }, [city]);
+    }, [city, opened]);
 
     const handleSubmit = async (values: { name: string; country: string }) => {
         if (!city) return;
@@ -165,25 +145,11 @@ const CityEditForm: FC<CityEditFormProps> = ({ opened, onClose, city }) => {
         <Modal opened={opened} onClose={onClose} title="Редактировать город" centered>
             <form onSubmit={form.onSubmit(handleSubmit)}>
                 <Stack gap="md">
-                    <TextInput
-                        label="Название города"
-                        placeholder="Введите название города"
-                        {...form.getInputProps("name")}
-                        required
-                    />
-                    <TextInput
-                        label="Страна"
-                        placeholder="Введите название страны"
-                        {...form.getInputProps("country")}
-                        required
-                    />
+                    <TextInput label="Название города" placeholder="Введите название города" {...form.getInputProps("name")} required />
+                    <TextInput label="Страна" placeholder="Введите название страны" {...form.getInputProps("country")} required />
                     <Group justify="flex-end" mt="md">
-                        <Button variant="light" onClick={onClose}>
-                            Отмена
-                        </Button>
-                        <Button type="submit" loading={isUpdating}>
-                            Сохранить изменения
-                        </Button>
+                        <Button variant="light" onClick={onClose}>Отмена</Button>
+                        <Button type="submit" loading={isUpdating}>Сохранить изменения</Button>
                     </Group>
                 </Stack>
             </form>
@@ -191,15 +157,14 @@ const CityEditForm: FC<CityEditFormProps> = ({ opened, onClose, city }) => {
     );
 };
 
-type CityProps = {
+type CityCardProps = {
     city: City;
     isAdmin: boolean;
+    onEdit: (city: City) => void;
 };
 
-const City: FC<CityProps> = ({ city, isAdmin }) => {
-    const { deleteCity } = useCityMutation();
-    const [editModalOpened, setEditModalOpened] = useState(false);
-
+const CityCard: FC<CityCardProps> = ({ city, isAdmin, onEdit }) => {
+    const { deleteCity, isDeleting } = useCityMutation();
     const handleDelete = () => {
         if (confirm(`Удалить город ${city.name}?`)) {
             deleteCity(city.id);
@@ -207,40 +172,22 @@ const City: FC<CityProps> = ({ city, isAdmin }) => {
     };
 
     return (
-        <>
-            <Card withBorder padding="lg" radius="md">
-                <CardSection inheritPadding py="xs">
-                    <Group justify="space-between">
-                        <Text fw={500} size="lg">
-                            {city.name}
-                        </Text>
-                    </Group>
-                </CardSection>
-                
-                <CardSection inheritPadding py="xs">
-                    <Text size="sm" c="dimmed">
-                        Страна: {city.country}
-                    </Text>
-                </CardSection>
-
-                {isAdmin && (
-                    <Group justify="flex-end" mt="md">
-                        <Button variant="light" onClick={() => setEditModalOpened(true)}>
-                            Редактировать
-                        </Button>
-                        <Button onClick={handleDelete}>
-                            Удалить
-                        </Button>
-                    </Group>
-                )}
-            </Card>
-
-            <CityEditForm
-                opened={editModalOpened}
-                onClose={() => setEditModalOpened(false)}
-                city={city}
-            />
-        </>
+        <Card withBorder padding="lg" radius="md">
+            <CardSection inheritPadding py="xs">
+                <Group justify="space-between">
+                    <Text fw={500} size="lg">{city.name}</Text>
+                </Group>
+            </CardSection>
+            <CardSection inheritPadding py="xs">
+                <Text size="sm" c="dimmed">Страна: {city.country}</Text>
+            </CardSection>
+            {isAdmin && (
+                <Group justify="flex-end" mt="md">
+                    <Button variant="light" onClick={() => onEdit(city)}>Редактировать</Button>
+                    <Button onClick={handleDelete} loading={isDeleting}>Удалить</Button>
+                </Group>
+            )}
+        </Card>
     );
 };
 
