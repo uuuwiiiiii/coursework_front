@@ -22,6 +22,11 @@ const Cities = () => {
     const [editingCity, setEditingCity] = useState<City | null>(null);
     const { isAuthenticated, isAdmin } = useAuth();
 
+    const handleCloseModal = () => {
+        setModalOpened(false);
+        setEditingCity(null);
+    };
+
     return (
         <div>
             <Group justify="space-between" align="center">
@@ -43,67 +48,26 @@ const Cities = () => {
                 ))}
             </Stack>
 
-            {isAdmin && (
-                <CityAddForm opened={modalOpened} onClose={() => setModalOpened(false)} />
-            )}
-
-            <CityEditForm
-                opened={!!editingCity}
-                onClose={() => setEditingCity(null)}
-                city={editingCity}
+            <CityForm
+                opened={modalOpened || !!editingCity}
+                onClose={handleCloseModal}
+                editingCity={editingCity}
             />
         </div>
     );
 };
 
-type CityAddFormProps = {
+type CityFormProps = {
     opened: boolean;
     onClose: () => void;
+    editingCity: City | null;
 };
 
-const CityAddForm: FC<CityAddFormProps> = ({ opened, onClose }) => {
-    const { addCity, isAdding } = useCityMutation();
-    const form = useForm({
-        initialValues: {
-            name: "",
-            country: "",
-        },
-        validate: {
-            name: (value) => (value.trim().length === 0 ? "Введите название города" : null),
-            country: (value) => (value.trim().length === 0 ? "Введите страну" : null),
-        },
-    });
+const CityForm: FC<CityFormProps> = ({ opened, onClose, editingCity }) => {
+    const { addCity, updateCity, isAdding, isUpdating } = useCityMutation();
+    const isEditing = !!editingCity;
+    const isSaving = isAdding || isUpdating;
 
-    const handleSubmit = async (values: { name: string; country: string }) => {
-        await addCity(values);
-        form.reset();
-        onClose();
-    };
-
-    return (
-        <Modal opened={opened} onClose={onClose} title="Добавить новый город" centered>
-            <form onSubmit={form.onSubmit(handleSubmit)}>
-                <Stack gap="md">
-                    <TextInput label="Название города" placeholder="Введите название города" {...form.getInputProps("name")} required />
-                    <TextInput label="Страна" placeholder="Введите название страны" {...form.getInputProps("country")} required />
-                    <Group justify="flex-end" mt="md">
-                        <Button variant="light" onClick={onClose}>Отмена</Button>
-                        <Button type="submit" loading={isAdding}>Добавить город</Button>
-                    </Group>
-                </Stack>
-            </form>
-        </Modal>
-    );
-};
-
-type CityEditFormProps = {
-    opened: boolean;
-    onClose: () => void;
-    city: City | null;
-};
-
-const CityEditForm: FC<CityEditFormProps> = ({ opened, onClose, city }) => {
-    const { updateCity, isUpdating } = useCityMutation();
     const form = useForm({
         initialValues: {
             name: "",
@@ -116,40 +80,41 @@ const CityEditForm: FC<CityEditFormProps> = ({ opened, onClose, city }) => {
     });
 
     useEffect(() => {
-        if (city && opened) {
+        if (editingCity && opened) {
             form.setValues({
-                name: city.name,
-                country: city.country,
+                name: editingCity.name,
+                country: editingCity.country,
             });
+        } else if (!opened) {
+            form.reset();
         }
-    }, [city, opened]);
+    }, [editingCity, opened]);
 
     const handleSubmit = async (values: { name: string; country: string }) => {
-        if (!city) return;
-
-        try {
-            await updateCity({
-                id: city.id,
+        if (isEditing && editingCity) {
+            updateCity({
+                id: editingCity.id,
                 name: values.name,
                 country: values.country,
             });
-            form.reset();
-            onClose();
-        } catch (error) {
-            console.error("Ошибка при обновлении города:", error);
-            alert("Произошла ошибка при сохранении города");
+        } else {
+            addCity(values);
         }
+        form.reset();
+        onClose();
     };
 
     return (
-        <Modal opened={opened} onClose={onClose} title="Редактировать город" centered>
+        <Modal opened={opened} onClose={onClose} title={isEditing ? "Редактировать город" : "Добавить город"} centered>
             <form onSubmit={form.onSubmit(handleSubmit)}>
                 <Stack gap="md">
                     <TextInput label="Название города" placeholder="Введите название города" {...form.getInputProps("name")} required />
                     <TextInput label="Страна" placeholder="Введите название страны" {...form.getInputProps("country")} required />
                     <Group justify="flex-end" mt="md">
                         <Button variant="light" onClick={onClose}>Отмена</Button>
-                        <Button type="submit" loading={isUpdating}>Сохранить изменения</Button>
+                        <Button type="submit" loading={isSaving}>
+                            {isEditing ? "Сохранить" : "Добавить"}
+                        </Button>
                     </Group>
                 </Stack>
             </form>
@@ -165,11 +130,6 @@ type CityCardProps = {
 
 const CityCard: FC<CityCardProps> = ({ city, isAdmin, onEdit }) => {
     const { deleteCity, isDeleting } = useCityMutation();
-    const handleDelete = () => {
-        if (confirm(`Удалить город ${city.name}?`)) {
-            deleteCity(city.id);
-        }
-    };
 
     return (
         <Card withBorder padding="lg" radius="md">
@@ -184,7 +144,7 @@ const CityCard: FC<CityCardProps> = ({ city, isAdmin, onEdit }) => {
             {isAdmin && (
                 <Group justify="flex-end" mt="md">
                     <Button variant="light" onClick={() => onEdit(city)}>Редактировать</Button>
-                    <Button onClick={handleDelete} loading={isDeleting}>Удалить</Button>
+                    <Button onClick={() => deleteCity(city.id)} loading={isDeleting}>Удалить</Button>
                 </Group>
             )}
         </Card>

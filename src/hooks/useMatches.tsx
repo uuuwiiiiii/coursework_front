@@ -5,7 +5,7 @@ import {
     useSuspenseQuery,
 } from "@tanstack/react-query";
 import axios from "axios";
-import type { Match } from "../types";
+import type { Match, MatchRestrictions } from "../types";
 
 export const matchesQueryOptions = queryOptions({
     queryKey: ["matches"],
@@ -16,8 +16,22 @@ export const matchesQueryOptions = queryOptions({
     staleTime: Infinity,
 });
 
+// Query для фильтрации матчей
+export const filteredMatchesQueryOptions = (restrictions: MatchRestrictions) => ({
+    queryKey: ["matches", "filtered", restrictions],
+    queryFn: async () => {
+        const { data } = await axios.post<Match[]>("api/matches/filter", restrictions);
+        return data;
+    },
+    staleTime: Infinity,
+});
+
 export const useMatchesQuery = () => {
     return useSuspenseQuery(matchesQueryOptions);
+};
+
+export const useFilteredMatchesQuery = (restrictions: MatchRestrictions) => {
+    return useSuspenseQuery(filteredMatchesQueryOptions(restrictions));
 };
 
 export const useMatchMutation = () => {

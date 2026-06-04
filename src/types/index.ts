@@ -43,3 +43,9 @@ export interface MatchPhase {
 	value: number;
 	phase: string;
 }
+
+export interface MatchRestrictions {
+	teamId?: number | null;
+	refereeId?: number | null;
+	date?: string | null;
+}

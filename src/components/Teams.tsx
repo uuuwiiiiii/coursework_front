@@ -25,6 +25,11 @@ const Teams = () => {
     const [editingTeam, setEditingTeam] = useState<Team | null>(null);
     const { isAuthenticated, isAdmin } = useAuth();
 
+    const handleCloseModal = () => {
+        setModalOpened(false);
+        setEditingTeam(null);
+    };
+
     return (
         <div>
             <Group justify="space-between" align="center">
@@ -46,14 +51,10 @@ const Teams = () => {
                 ))}
             </Stack>
 
-            {isAdmin && (
-                <TeamForm opened={modalOpened} onClose={() => setModalOpened(false)} />
-            )}
-
-            <TeamEditForm
-                opened={!!editingTeam}
-                onClose={() => setEditingTeam(null)}
-                team={editingTeam}
+            <TeamForm
+                opened={modalOpened || !!editingTeam}
+                onClose={handleCloseModal}
+                editingTeam={editingTeam}
             />
         </div>
     );
@@ -62,79 +63,15 @@ const Teams = () => {
 type TeamFormProps = {
     opened: boolean;
     onClose: () => void;
+    editingTeam: Team | null;
 };
 
-const TeamForm: FC<TeamFormProps> = ({ opened, onClose }) => {
-    const { addTeam, isAdding } = useTeamMutation();
+const TeamForm: FC<TeamFormProps> = ({ opened, onClose, editingTeam }) => {
+    const { addTeam, updateTeam, isAdding, isUpdating } = useTeamMutation();
     const { data: cities } = useCitiesQuery();
-    const form = useForm({
-        initialValues: {
-            name: "",
-            peoplesInTeam: 0,
-            numOfWin: 0,
-            cityId: null as number | null,
-        },
-        validate: {
-            name: (value) => (value.trim().length === 0 ? "Введите название команды" : null),
-            peoplesInTeam: (value) => (value <= 0 ? "Количество игроков должно быть больше 0" : null),
-            numOfWin: (value) => (value < 0 ? "Количество побед не может быть отрицательным" : null),
-            cityId: (value) => (!value ? "Выберите город" : null),
-        },
-    });
+    const isEditing = !!editingTeam;
+    const isSaving = isAdding || isUpdating;
 
-    const handleSubmit = async (values: typeof form.values) => {
-        const cityId = typeof values.cityId === "string" ? parseInt(values.cityId) : values.cityId;
-        const selectedCity = cities?.find((city) => city.id === cityId);
-        if (!selectedCity) {
-            form.setFieldError("cityId", "Город не найден");
-            return;
-        }
-
-        const teamData = {
-            name: values.name,
-            peoplesInTeam: values.peoplesInTeam,
-            numOfWin: values.numOfWin,
-            city: selectedCity,
-        };
-
-        await addTeam(teamData);
-        form.reset();
-        onClose();
-    };
-
-    const cityOptions =
-        cities?.map((city: City) => ({
-            value: city.id.toString(),
-            label: `${city.name} (${city.country})`,
-        })) || [];
-
-    return (
-        <Modal opened={opened} onClose={onClose} title="Добавить новую команду" size="lg" centered>
-            <form onSubmit={form.onSubmit(handleSubmit)}>
-                <Stack gap="md">
-                    <TextInput label="Название команды" placeholder="Введите название команды" {...form.getInputProps("name")} required />
-                    <NumberInput label="Количество игроков" min={1} {...form.getInputProps("peoplesInTeam")} required />
-                    <NumberInput label="Количество побед" min={0} {...form.getInputProps("numOfWin")} required />
-                    <Select label="Город" placeholder="Выберите город" data={cityOptions} {...form.getInputProps("cityId")} required />
-                    <Group justify="flex-end" mt="md">
-                        <Button variant="light" onClick={onClose}>Отмена</Button>
-                        <Button type="submit" loading={isAdding}>Добавить команду</Button>
-                    </Group>
-                </Stack>
-            </form>
-        </Modal>
-    );
-};
-
-type TeamEditFormProps = {
-    opened: boolean;
-    onClose: () => void;
-    team: Team | null;
-};
-
-const TeamEditForm: FC<TeamEditFormProps> = ({ opened, onClose, team }) => {
-    const { updateTeam, isUpdating } = useTeamMutation();
-    const { data: cities } = useCitiesQuery();
     const form = useForm({
         initialValues: {
             name: "",
@@ -151,19 +88,19 @@ const TeamEditForm: FC<TeamEditFormProps> = ({ opened, onClose, team }) => {
     });
 
     useEffect(() => {
-        if (team && opened) {
+        if (editingTeam && opened) {
             form.setValues({
-                name: team.name,
-                peoplesInTeam: team.peoplesInTeam,
-                numOfWin: team.numOfWin,
-                cityId: team.city?.id || null,
+                name: editingTeam.name,
+                peoplesInTeam: editingTeam.peoplesInTeam,
+                numOfWin: editingTeam.numOfWin,
+                cityId: editingTeam.city?.id || null,
             });
+        } else if (!opened) {
+            form.reset();
         }
-    }, [team, opened]);
+    }, [editingTeam, opened]);
 
     const handleSubmit = async (values: typeof form.values) => {
-        if (!team) return;
-
         const cityId = typeof values.cityId === "string" ? parseInt(values.cityId) : values.cityId;
         const selectedCity = cities?.find((city) => city.id === cityId);
         if (!selectedCity) {
@@ -171,39 +108,40 @@ const TeamEditForm: FC<TeamEditFormProps> = ({ opened, onClose, team }) => {
             return;
         }
 
-        try {
-            await updateTeam({
-                id: team.id,
-                name: values.name,
-                peoplesInTeam: values.peoplesInTeam,
-                numOfWin: values.numOfWin,
-                city: selectedCity,
-            });
-            form.reset();
-            onClose();
-        } catch (error) {
-            console.error("Ошибка при обновлении команды:", error);
-            alert("Произошла ошибка при сохранении команды");
+        const teamData = {
+            name: values.name,
+            peoplesInTeam: values.peoplesInTeam,
+            numOfWin: values.numOfWin,
+            city: selectedCity,
+        };
+
+        if (isEditing && editingTeam) {
+            await updateTeam({ id: editingTeam.id, ...teamData });
+        } else {
+            await addTeam(teamData);
         }
+        form.reset();
+        onClose();
     };
 
-    const cityOptions =
-        cities?.map((city: City) => ({
-            value: city.id.toString(),
-            label: `${city.name} (${city.country})`,
-        })) || [];
+    const cityOptions = cities?.map((city: City) => ({
+        value: city.id.toString(),
+        label: `${city.name} (${city.country})`,
+    })) || [];
 
     return (
-        <Modal opened={opened} onClose={onClose} title="Редактировать команду" size="lg" centered>
+        <Modal opened={opened} onClose={onClose} title={isEditing ? "Редактировать команду" : "Добавить команду"} size="lg" centered>
             <form onSubmit={form.onSubmit(handleSubmit)}>
                 <Stack gap="md">
-                    <TextInput label="Название команды" {...form.getInputProps("name")} required />
+                    <TextInput label="Название команды" placeholder="Введите название команды" {...form.getInputProps("name")} required />
                     <NumberInput label="Количество игроков" min={1} {...form.getInputProps("peoplesInTeam")} required />
                     <NumberInput label="Количество побед" min={0} {...form.getInputProps("numOfWin")} required />
                     <Select label="Город" placeholder="Выберите город" data={cityOptions} {...form.getInputProps("cityId")} required />
                     <Group justify="flex-end" mt="md">
                         <Button variant="light" onClick={onClose}>Отмена</Button>
-                        <Button type="submit" loading={isUpdating}>Сохранить изменения</Button>
+                        <Button type="submit" loading={isSaving}>
+                            {isEditing ? "Сохранить" : "Добавить"}
+                        </Button>
                     </Group>
                 </Stack>
             </form>
@@ -219,11 +157,6 @@ type TeamCardProps = {
 
 const TeamCard: FC<TeamCardProps> = ({ team, isAdmin, onEdit }) => {
     const { deleteTeam, isDeleting } = useTeamMutation();
-    const handleDelete = () => {
-        if (confirm(`Удалить команду ${team.name}?`)) {
-            deleteTeam(team.id);
-        }
-    };
 
     return (
         <Card withBorder padding="lg" radius="md">
@@ -242,7 +175,7 @@ const TeamCard: FC<TeamCardProps> = ({ team, isAdmin, onEdit }) => {
             {isAdmin && (
                 <Group justify="flex-end" mt="md">
                     <Button variant="light" onClick={() => onEdit(team)}>Редактировать</Button>
-                    <Button onClick={handleDelete} loading={isDeleting}>Удалить</Button>
+                    <Button onClick={() => deleteTeam(team.id)} loading={isDeleting}>Удалить</Button>
                 </Group>
             )}
         </Card>

@@ -1,6 +1,6 @@
-import {type FC, useEffect, useState} from "react";
+import {type FC, useState} from "react";
 import {exportMatchesToCSV} from "../hooks/useExport";
-import type {City, Match, Referee, Team} from "../types";
+import type {City, Match, MatchRestrictions, Referee, Team} from "../types";
 import {
     Badge,
     Button,
@@ -16,57 +16,50 @@ import {
     Text,
     TextInput,
 } from "@mantine/core";
-import {DateTimePicker} from "@mantine/dates";
 import {useForm} from "@mantine/form";
-import {useMatchesQuery, useMatchMutation} from "../hooks/useMatches";
+import {useFilteredMatchesQuery, useMatchMutation} from "../hooks/useMatches";
 import {useTeamsQuery} from "../hooks/useTeams";
 import {useRefereesQuery} from "../hooks/useReferees";
 import {useCitiesQuery} from "../hooks/useCities";
 import {useAuth} from "../context/AuthContext";
 import "@mantine/core/styles.css";
-import "@mantine/dates/styles.css";
-import dayjs from "dayjs";
+import {useMatchAvailability} from "../hooks/useMatchAvailability";
 
 const Matches = () => {
-    const {data: matches} = useMatchesQuery();
+    const [restrictions, setRestrictions] = useState<MatchRestrictions>({});
     const [modalOpened, setModalOpened] = useState(false);
-    const [selectedDate, setSelectedDate] = useState<Date | null>(null);
-    const [filteredMatches, setFilteredMatches] = useState<Match[]>([]);
-
     const [editingMatch, setEditingMatch] = useState<Match | null>(null);
-
     const {isAuthenticated, isAdmin} = useAuth();
 
-    useEffect(() => {
-        if (matches) {
-            if (selectedDate) {
-                const filtered = matches.filter((match) => {
-                    const matchDate = dayjs(match.dateTime).format("YYYY-MM-DD");
-                    const filterDate = dayjs(selectedDate).format("YYYY-MM-DD");
-                    return matchDate === filterDate;
-                });
-                setFilteredMatches(filtered);
-            } else {
-                setFilteredMatches(matches);
-            }
-        }
-    }, [matches, selectedDate]);
+    // Используем фильтрованный запрос
+    const {data: matches} = useFilteredMatchesQuery(restrictions);
+    const {data: teams} = useTeamsQuery();
+    const {data: referees} = useRefereesQuery();
 
-    const displayMatches = selectedDate ? filteredMatches : matches || [];
+    const handleFilterChange = (key: keyof MatchRestrictions, value: string | null) => {
+        setRestrictions(prev => ({
+            ...prev,
+            [key]: value ? (key === 'date' ? value : Number(value)) : null
+        }));
+    };
+
+    const teamOptions = teams?.map((team: Team) => ({
+        value: team.id.toString(),
+        label: `${team.name} (${team.city?.name})`
+    })) || [];
+
+    const refereeOptions = referees?.map((referee: Referee) => ({
+        value: referee.id.toString(),
+        label: `${referee.fio} (${referee.city?.name})`
+    })) || [];
+
+    const displayMatches = matches || [];
 
     return (
         <div>
             <Group justify="space-between" align="center" wrap="wrap">
                 <h1>Матчи</h1>
                 <Group>
-                    <DateTimePicker
-                        placeholder="Выберите дату"
-                        value={selectedDate}
-                        onChange={setSelectedDate}
-                        clearable
-                        size="sm"
-                        style={{width: 250}}
-                    />
                     {isAuthenticated && (
                         <Button variant="outline" onClick={() => exportMatchesToCSV(displayMatches)}>
                             Сохранить CSV
@@ -78,40 +71,66 @@ const Matches = () => {
                 </Group>
             </Group>
 
-            {selectedDate && (
-                <Text size="sm" c="dimmed" mt="xs">
-                    Показаны матчи за {dayjs(selectedDate).format("DD.MM.YYYY")}
-                    <Button variant="subtle" size="compact-sm" onClick={() => setSelectedDate(null)} ml="md">
-                        Сбросить фильтр
-                    </Button>
-                </Text>
-            )}
+            <Card withBorder p="md" mt="md">
+                <Group grow>
+                    <Select
+                        label="Команда"
+                        placeholder="Все команды"
+                        data={teamOptions}
+                        value={restrictions.teamId?.toString() || null}
+                        onChange={(val) => handleFilterChange('teamId', val)}
+                        clearable
+                    />
+                    <Select
+                        label="Судья"
+                        placeholder="Все судьи"
+                        data={refereeOptions}
+                        value={restrictions.refereeId?.toString() || null}
+                        onChange={(val) => handleFilterChange('refereeId', val)}
+                        clearable
+                    />
+                    <TextInput
+                        label="Дата"
+                        type="date"
+                        placeholder="Выберите дату"
+                        value={restrictions.date || ""}
+                        onChange={(e) => handleFilterChange('date', e.target.value || null)}
+                    />
+                    {(restrictions.teamId || restrictions.refereeId || restrictions.date) && (
+                        <Button variant="subtle" onClick={() => setRestrictions({})} mt="auto">
+                            Сбросить фильтры
+                        </Button>
+                    )}
+                </Group>
+            </Card>
 
             <Stack gap="md" mt="xl">
                 {displayMatches.length === 0 ? (
-                    <Text ta="center" c="dimmed" py="xl">
-                        {selectedDate ? "Нет матчей за выбранную дату" : "Нет матчей"}
-                    </Text>
+                    <Text ta="center" c="dimmed" py="xl">Нет матчей</Text>
                 ) : (
                     displayMatches.map((match) => (
                         <MatchCard
                             key={match.id}
                             match={match}
                             isAdmin={isAdmin}
-                            onEdit={setEditingMatch} // ✅ Передаем функцию открытия
+                            onEdit={setEditingMatch}
                         />
                     ))
                 )}
             </Stack>
 
             {isAdmin && (
-                <MatchForm opened={modalOpened} onClose={() => setModalOpened(false)}/>
+                <MatchForm
+                    opened={modalOpened}
+                    onClose={() => setModalOpened(false)}
+                    editingMatch={null}
+                />
             )}
 
-            <MatchEditForm
+            <MatchForm
                 opened={!!editingMatch}
                 onClose={() => setEditingMatch(null)}
-                match={editingMatch}
+                editingMatch={editingMatch}
             />
         </div>
     );
@@ -120,71 +139,84 @@ const Matches = () => {
 type MatchFormProps = {
     opened: boolean;
     onClose: () => void;
+    editingMatch: Match | null;
 };
 
-const MatchForm: FC<MatchFormProps> = ({opened, onClose}) => {
-    const {addMatch, isAdding} = useMatchMutation();
+const MatchForm: FC<MatchFormProps> = ({opened, onClose, editingMatch}) => {
+    const {addMatch, updateMatch, isAdding, isUpdating} = useMatchMutation();
     const {data: teams} = useTeamsQuery();
     const {data: referees} = useRefereesQuery();
     const {data: cities} = useCitiesQuery();
-
+    const isEditing = !!editingMatch;
+    const isSaving = isAdding || isUpdating;
+    const {mutateAsync: checkAvailability, isPending: isChecking} = useMatchAvailability();
     const form = useForm({
         initialValues: {
-            teamGuestId: null as number | null,
-            teamHostId: null as number | null,
-            refereeId: null as number | null,
-            cityId: null as number | null,
-            stageType: 1,
-            phaseType: 4,
-            guestCount: 0,
-            hostCount: 0,
-            dateTime: "",
+            teamGuestId: editingMatch?.teamGuest?.id || null,
+            teamHostId: editingMatch?.teamHost?.id || null,
+            refereeId: editingMatch?.referee?.id || null,
+            cityId: editingMatch?.city?.id || null,
+            stageType: editingMatch?.stageType || 1,
+            phaseType: editingMatch?.phaseType || 4,
+            guestCount: editingMatch?.guestCount || 0,
+            hostCount: editingMatch?.hostCount || 0,
+            dateTime: editingMatch?.dateTime?.substring(0, 16) || "",
         },
         validate: {
-            teamGuestId: (value) => (!value ? "Выберите гостевую команду" : null),
-            teamHostId: (value) => (!value ? "Выберите домашнюю команду" : null),
-            refereeId: (value) => (!value ? "Выберите судью" : null),
-            cityId: (value) => (!value ? "Выберите город" : null),
-            guestCount: (value) => (value !== null && value < 0 ? "Не может быть отрицательным" : null),
-            hostCount: (value) => (value !== null && value < 0 ? "Не может быть отрицательным" : null),
-            dateTime: (value) => (!value ? "Выберите дату и время" : null),
+            teamGuestId: (v) => !v ? "Выберите гостевую команду" : null,
+            teamHostId: (v) => !v ? "Выберите домашнюю команду" : null,
+            refereeId: (v) => !v ? "Выберите судью" : null,
+            cityId: (v) => !v ? "Выберите город" : null,
+            dateTime: (v) => !v ? "Выберите дату и время" : null,
         },
     });
 
     const handleSubmit = async (values: typeof form.values) => {
         if (values.teamGuestId === values.teamHostId) {
-            alert("❌ Ошибка: Команда-хозяин и команда-гость должны быть разными!");
+            alert("❌ Команды должны быть разными!");
             return;
         }
 
-        const selectedTeamGuest = teams?.find((team) => team.id === Number(values.teamGuestId));
-        const selectedTeamHost = teams?.find((team) => team.id === Number(values.teamHostId));
-        const selectedReferee = referees?.find((referee) => referee.id === Number(values.refereeId));
-        const selectedCity = cities?.find((city) => city.id === Number(values.cityId));
+        const selectedTeamGuest = teams?.find(t => t.id === Number(values.teamGuestId));
+        const selectedTeamHost = teams?.find(t => t.id === Number(values.teamHostId));
+        const selectedReferee = referees?.find(r => r.id === Number(values.refereeId));
+        const selectedCity = cities?.find(c => c.id === Number(values.cityId));
 
         if (!selectedTeamGuest || !selectedTeamHost || !selectedReferee || !selectedCity) {
-            alert("❌ Убедитесь, что выбраны все поля");
+            alert("❌ Заполните все поля");
             return;
         }
 
-        if (selectedReferee.city?.id === selectedTeamHost.city?.id) {
-            alert(`❌ Судья ${selectedReferee.fio} проживает в городе команды-хозяина!`);
-            return;
-        }
-
-        if (selectedReferee.city?.id === selectedTeamGuest.city?.id) {
-            alert(`❌ Судья ${selectedReferee.fio} проживает в городе команды-гостя!`);
+        if (selectedReferee.city?.id === selectedTeamHost.city?.id ||
+            selectedReferee.city?.id === selectedTeamGuest.city?.id) {
+            alert("❌ Судья не может быть из города одной из команд!");
             return;
         }
 
         if (selectedReferee.city?.id === selectedCity?.id) {
-            alert(`❌ Судья ${selectedReferee.fio} проживает в этом городе ${selectedReferee.city?.name}!`);
+            alert("❌ Судья не может проживать в городе проведения матча!");
             return;
         }
 
-        let formattedDateTime = values.dateTime;
-        if (formattedDateTime && !formattedDateTime.includes("T")) {
-            formattedDateTime = formattedDateTime.replace(" ", "T");
+        // Проверка доступности на дату
+        try {
+            const isAvailable = await checkAvailability({
+                teamGuestId: Number(values.teamGuestId),
+                teamHostId: Number(values.teamHostId),
+                refereeId: Number(values.refereeId),
+                dateTime: values.dateTime,
+                excludeMatchId: isEditing && editingMatch ? editingMatch.id : undefined,
+            });
+
+            if (!isAvailable) {
+                alert("❌ На выбранную дату команда или судья уже заняты!\n" +
+                    "У команды или судьи уже есть матч в этот день.");
+                return;
+            }
+        } catch (error) {
+            console.error("Ошибка проверки доступности:", error);
+            alert("Ошибка при проверке доступности");
+            return;
         }
 
         const matchData = {
@@ -196,241 +228,87 @@ const MatchForm: FC<MatchFormProps> = ({opened, onClose}) => {
             phaseType: values.phaseType,
             guestCount: values.guestCount,
             hostCount: values.hostCount,
-            dateTime: formattedDateTime,
-        };
-
-        await addMatch(matchData);
-        form.reset();
-        onClose();
-    };
-
-    const teamOptions = teams?.map((team: Team) => ({
-        value: team.id.toString(),
-        label: `${team.name} (${team.city?.name})`
-    })) || [];
-    const refereeOptions = referees?.map((referee: Referee) => ({
-        value: referee.id.toString(),
-        label: `${referee.fio} (${referee.city?.name})`
-    })) || [];
-    const cityOptions = cities?.map((city: City) => ({
-        value: city.id.toString(),
-        label: `${city.name} (${city.country})`
-    })) || [];
-
-    const stageOptions = [
-        {value: 1, label: "Групповой этап"}, {value: 2, label: "1/8 финала"}, {value: 3, label: "1/4 финала"},
-        {value: 4, label: "1/2 финала"}, {value: 5, label: "Финал"}, {value: 6, label: "Матч за 3 место"},
-    ];
-    const phaseOptions = [
-        {value: 1, label: "Закончен"}, {value: 2, label: "Отменен"}, {value: 3, label: "Идет"}, {
-            value: 4,
-            label: "Запланирован"
-        },
-    ];
-
-    return (
-        <Modal opened={opened} onClose={onClose} title="Добавить новый матч" size="xl" centered>
-            <form onSubmit={form.onSubmit(handleSubmit)}>
-                <Stack gap="md">
-                    <Grid>
-                        <Grid.Col span={6}><Select label="Гостевая команда" placeholder="Выберите команду"
-                                                   data={teamOptions} {...form.getInputProps("teamGuestId")} required/></Grid.Col>
-                        <Grid.Col span={6}><Select label="Домашняя команда" placeholder="Выберите команду"
-                                                   data={teamOptions} {...form.getInputProps("teamHostId")}
-                                                   required/></Grid.Col>
-                    </Grid>
-                    <Grid>
-                        <Grid.Col span={6}><Select label="Судья" placeholder="Выберите судью"
-                                                   data={refereeOptions} {...form.getInputProps("refereeId")} required/></Grid.Col>
-                        <Grid.Col span={6}><Select label="Город" placeholder="Выберите город"
-                                                   data={cityOptions} {...form.getInputProps("cityId")}
-                                                   required/></Grid.Col>
-                    </Grid>
-                    <Grid>
-                        <Grid.Col span={6}><Select label="Стадия турнира"
-                                                   data={stageOptions} {...form.getInputProps("stageType")}
-                                                   required/></Grid.Col>
-                        <Grid.Col span={6}><Select label="Статус"
-                                                   data={phaseOptions} {...form.getInputProps("phaseType")}
-                                                   required/></Grid.Col>
-                    </Grid>
-                    <Grid>
-                        <Grid.Col span={6}><NumberInput label="Очки гостей"
-                                                        min={0} {...form.getInputProps("guestCount")}
-                                                        required/></Grid.Col>
-                        <Grid.Col span={6}><NumberInput label="Очки хозяев" min={0} {...form.getInputProps("hostCount")}
-                                                        required/></Grid.Col>
-                    </Grid>
-                    <TextInput label="Дата и время" type="datetime-local" {...form.getInputProps("dateTime")} required/>
-                    <Group justify="flex-end" mt="md">
-                        <Button variant="light" onClick={onClose}>Отмена</Button>
-                        <Button type="submit" loading={isAdding}>Добавить матч</Button>
-                    </Group>
-                </Stack>
-            </form>
-        </Modal>
-    );
-};
-
-type MatchEditFormProps = {
-    opened: boolean;
-    onClose: () => void;
-    match: Match | null;
-};
-
-const MatchEditForm: FC<MatchEditFormProps> = ({opened, onClose, match}) => {
-    const {updateMatch, isUpdating} = useMatchMutation();
-    const {data: teams} = useTeamsQuery();
-    const {data: referees} = useRefereesQuery();
-    const {data: cities} = useCitiesQuery();
-
-    const form = useForm({
-        initialValues: {
-            teamGuestId: null as number | null,
-            teamHostId: null as number | null,
-            refereeId: null as number | null,
-            cityId: null as number | null,
-            stageType: 1,
-            phaseType: 4,
-            guestCount: 0,
-            hostCount: 0,
-            dateTime: "",
-        },
-        validate: {
-            teamGuestId: (value) => (!value ? "Выберите гостевую команду" : null),
-            teamHostId: (value) => (!value ? "Выберите домашнюю команду" : null),
-            refereeId: (value) => (!value ? "Выберите судью" : null),
-            cityId: (value) => (!value ? "Выберите город" : null),
-            guestCount: (value) => (value !== null && value < 0 ? "Не может быть отрицательным" : null),
-            hostCount: (value) => (value !== null && value < 0 ? "Не может быть отрицательным" : null),
-            dateTime: (value) => (!value ? "Выберите дату и время" : null),
-        },
-    });
-
-    useEffect(() => {
-        if (match && opened) {
-            const safeDateTime = match.dateTime ? match.dateTime.substring(0, 16) : "";
-            form.setValues({
-                teamGuestId: match.teamGuest?.id || null,
-                teamHostId: match.teamHost?.id || null,
-                refereeId: match.referee?.id || null, // ✅ Исправлено (было "match .referee?.i d")
-                cityId: match.city?.id || null,
-                stageType: match.stageType || 1,
-                phaseType: match.phaseType || 4,
-                guestCount: match.guestCount || 0, // ✅ Исправлено (было "match.gues tCount")
-                hostCount: match.hostCount || 0,
-                dateTime: safeDateTime,
-            });
-        }
-    }, [match, opened]);
-
-    const teamOptions = teams?.map((team: Team) => ({
-        value: team.id.toString(),
-        label: `${team.name} (${team.city?.name})`
-    })) || [];
-    const refereeOptions = referees?.map((referee: Referee) => ({
-        value: referee.id.toString(),
-        label: `${referee.fio} (${referee.city?.name})`
-    })) || [];
-    const cityOptions = cities?.map((city: City) => ({
-        value: city.id.toString(),
-        label: `${city.name} (${city.country})`
-    })) || [];
-
-    const stageOptions = [
-        {value: 1, label: "Групповой этап"}, {value: 2, label: "1/8 финала"}, {value: 3, label: "1/4 финала"},
-        {value: 4, label: "1/2 финала"}, {value: 5, label: "Финал"}, {value: 6, label: "Матч за 3 место"},
-    ];
-    const phaseOptions = [
-        {value: 1, label: "Закончен"}, {value: 2, label: "Отменен"}, {value: 3, label: "Идет"}, {
-            value: 4,
-            label: "Запланирован"
-        },
-    ];
-
-    const handleSubmit = async (values: typeof form.values) => {
-        if (!match) return;
-
-        if (values.teamGuestId === values.teamHostId) {
-            alert("❌ Ошибка: Команды должны быть разными!");
-            return;
-        }
-
-        const selectedTeamGuest = teams?.find((team) => team.id === Number(values.teamGuestId));
-        const selectedTeamHost = teams?.find((team) => team.id === Number(values.teamHostId));
-        const selectedReferee = referees?.find((referee) => referee.id === Number(values.refereeId));
-        const selectedCity = cities?.find((city) => city.id === Number(values.cityId));
-
-        if (!selectedTeamGuest || !selectedTeamHost || !selectedReferee || !selectedCity) {
-            alert("❌ Убедитесь, что выбраны все поля");
-            return;
-        }
-
-        if (selectedReferee.city?.id === selectedTeamHost.city?.id || selectedReferee.city?.id === selectedTeamGuest.city?.id) {
-            alert("❌ Судья не может быть из города одной из команд!");
-            return;
-        }
-
-        if (selectedReferee.city?.id === selectedCity?.id) {
-            alert(`❌ Судья ${selectedReferee.fio} проживает в этом городе ${selectedReferee.city?.name}!`);
-            return;
-        }
-
-        const matchData = {
-            id: match.id,
-            teamGuest: {id: selectedTeamGuest.id},
-            teamHost: {id: selectedTeamHost.id},
-            referee: {id: selectedReferee.id}, // ✅ Исправлено
-            city: {id: selectedCity.id},
-            stageType: values.stageType,
-            phaseType: values.phaseType,
-            guestCount: values.guestCount, // ✅ Исправлено
-            hostCount: values.hostCount,
             dateTime: values.dateTime,
         };
 
-        updateMatch(matchData);
+        if (isEditing && editingMatch) {
+            updateMatch({id: editingMatch.id, ...matchData});
+        } else {
+            addMatch(matchData);
+        }
+
         form.reset();
         onClose();
     };
 
+    const teamOptions = teams?.map((team: Team) => ({
+        value: team.id.toString(),
+        label: `${team.name} (${team.city?.name})`
+    })) || [];
+    const refereeOptions = referees?.map((referee: Referee) => ({
+        value: referee.id.toString(),
+        label: `${referee.fio} (${referee.city?.name})`
+    })) || [];
+    const cityOptions = cities?.map((city: City) => ({
+        value: city.id.toString(),
+        label: `${city.name} (${city.country})`
+    })) || [];
+
+    const stageOptions = [
+        {value: 1, label: "Групповой этап"}, {value: 2, label: "1/8 финала"},
+        {value: 3, label: "1/4 финала"}, {value: 4, label: "1/2 финала"},
+        {value: 5, label: "Финал"}, {value: 6, label: "Матч за 3 место"},
+    ];
+    const phaseOptions = [
+        {value: 1, label: "Закончен"}, {value: 2, label: "Отменен"},
+        {value: 3, label: "Идет"}, {value: 4, label: "Запланирован"},
+    ];
+
     return (
-        <Modal opened={opened} onClose={onClose} title="Редактировать матч" size="xl" centered>
+        <Modal opened={opened} onClose={onClose} title={isEditing ? "Редактировать матч" : "Добавить матч"} size="xl"
+               centered>
             <form onSubmit={form.onSubmit(handleSubmit)}>
                 <Stack gap="md">
                     <Grid>
-                        <Grid.Col span={6}><Select label="Гостевая команда" placeholder="Выберите команду"
-                                                   data={teamOptions} {...form.getInputProps("teamGuestId")} required/></Grid.Col>
-                        <Grid.Col span={6}><Select label="Домашняя команда" placeholder="Выберите команду"
-                                                   data={teamOptions} {...form.getInputProps("teamHostId")}
-                                                   required/></Grid.Col>
+                        <Grid.Col span={6}>
+                            <Select label="Гостевая команда" data={teamOptions} {...form.getInputProps("teamGuestId")}
+                                    required/>
+                        </Grid.Col>
+                        <Grid.Col span={6}>
+                            <Select label="Домашняя команда" data={teamOptions} {...form.getInputProps("teamHostId")}
+                                    required/>
+                        </Grid.Col>
                     </Grid>
                     <Grid>
-                        <Grid.Col span={6}><Select label="Судья" placeholder="Выберите судью"
-                                                   data={refereeOptions} {...form.getInputProps("refereeId")} required/></Grid.Col>
-                        <Grid.Col span={6}><Select label="Город" placeholder="Выберите город"
-                                                   data={cityOptions} {...form.getInputProps("cityId")}
-                                                   required/></Grid.Col>
+                        <Grid.Col span={6}>
+                            <Select label="Судья" data={refereeOptions} {...form.getInputProps("refereeId")} required/>
+                        </Grid.Col>
+                        <Grid.Col span={6}>
+                            <Select label="Город" data={cityOptions} {...form.getInputProps("cityId")} required/>
+                        </Grid.Col>
                     </Grid>
                     <Grid>
-                        <Grid.Col span={6}><Select label="Стадия турнира"
-                                                   data={stageOptions} {...form.getInputProps("stageType")}
-                                                   required/></Grid.Col>
-                        <Grid.Col span={6}><Select label="Статус"
-                                                   data={phaseOptions} {...form.getInputProps("phaseType")}
-                                                   required/></Grid.Col>
+                        <Grid.Col span={6}>
+                            <Select label="Стадия" data={stageOptions} {...form.getInputProps("stageType")} required/>
+                        </Grid.Col>
+                        <Grid.Col span={6}>
+                            <Select label="Статус" data={phaseOptions} {...form.getInputProps("phaseType")} required/>
+                        </Grid.Col>
                     </Grid>
                     <Grid>
-                        <Grid.Col span={6}><NumberInput label="Очки гостей"
-                                                        min={0} {...form.getInputProps("guestCount")}
-                                                        required/></Grid.Col>
-                        <Grid.Col span={6}><NumberInput label="Очки хозяев" min={0} {...form.getInputProps("hostCount")}
-                                                        required/></Grid.Col>
+                        <Grid.Col span={6}>
+                            <NumberInput label="Очки гостей" min={0} {...form.getInputProps("guestCount")} required/>
+                        </Grid.Col>
+                        <Grid.Col span={6}>
+                            <NumberInput label="Очки хозяев" min={0} {...form.getInputProps("hostCount")} required/>
+                        </Grid.Col>
                     </Grid>
                     <TextInput label="Дата и время" type="datetime-local" {...form.getInputProps("dateTime")} required/>
                     <Group justify="flex-end" mt="md">
                         <Button variant="light" onClick={onClose}>Отмена</Button>
-                        <Button type="submit" loading={isUpdating}>Сохранить изменения</Button>
+                        <Button type="submit" loading={isSaving || isChecking}>
+                            {isEditing ? "Сохранить" : "Добавить"}
+                        </Button>
                     </Group>
                 </Stack>
             </form>
@@ -441,17 +319,11 @@ const MatchEditForm: FC<MatchEditFormProps> = ({opened, onClose, match}) => {
 type MatchCardProps = {
     match: Match;
     isAdmin: boolean;
-    onEdit: (match: Match) => void; // ✅ Новый пропс
+    onEdit: (match: Match) => void;
 };
 
 const MatchCard: FC<MatchCardProps> = ({match, isAdmin, onEdit}) => {
     const {deleteMatch, isDeleting} = useMatchMutation();
-
-    const handleDelete = () => {
-        if (window.confirm(`Удалить матч ${match.teamGuest.name} vs ${match.teamHost.name}?`)) {
-            deleteMatch(match.id);
-        }
-    };
 
     const formatDateTime = (dateTime: string) => {
         const date = new Date(dateTime);
@@ -462,12 +334,8 @@ const MatchCard: FC<MatchCardProps> = ({match, isAdmin, onEdit}) => {
 
     const getStageName = (stageType: number) => {
         const stages: Record<number, string> = {
-            1: "Групповой этап",
-            2: "1/8 финала",
-            3: "1/4 финала",
-            4: "1/2 финала",
-            5: "Финал",
-            6: "Матч за 3 место"
+            1: "Групповой этап", 2: "1/8 финала", 3: "1/4 финала",
+            4: "1/2 финала", 5: "Финал", 6: "Матч за 3 место"
         };
         return stages[stageType] || "Неизвестно";
     };
@@ -487,8 +355,9 @@ const MatchCard: FC<MatchCardProps> = ({match, isAdmin, onEdit}) => {
             <CardSection inheritPadding py="xs">
                 <Group justify="space-between">
                     <Text fw={500} size="lg">{match.teamGuest.name} vs {match.teamHost.name}</Text>
-                    <Badge color={getStatusColor(match.phaseType)}
-                           variant="light">{getStatusName(match.phaseType)}</Badge>
+                    <Badge color={getStatusColor(match.phaseType)} variant="light">
+                        {getStatusName(match.phaseType)}
+                    </Badge>
                 </Group>
             </CardSection>
             <CardSection inheritPadding py="xs">
@@ -502,13 +371,13 @@ const MatchCard: FC<MatchCardProps> = ({match, isAdmin, onEdit}) => {
                     <Text size="sm"><strong>Судья:</strong> {match.referee.fio}</Text>
                     <Text size="sm"><strong>Город:</strong> {match.city.name} ({match.city.country})</Text>
                     <Text size="sm"><strong>Стадия:</strong> {getStageName(match.stageType)}</Text>
-                    <Text size="sm"><strong>Дата и время:</strong> {formatDateTime(match.dateTime)}</Text>
+                    <Text size="sm"><strong>Дата:</strong> {formatDateTime(match.dateTime)}</Text>
                 </Stack>
             </CardSection>
             {isAdmin && (
                 <Group justify="flex-end" mt="md">
                     <Button variant="light" onClick={() => onEdit(match)}>Редактировать</Button>
-                    <Button onClick={handleDelete} loading={isDeleting}>Удалить</Button>
+                    <Button onClick={() => deleteMatch(match.id)} loading={isDeleting}>Удалить</Button>
                 </Group>
             )}
         </Card>
