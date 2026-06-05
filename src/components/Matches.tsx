@@ -1,4 +1,4 @@
-import {type FC, useState} from "react";
+import {type FC, useEffect, useState} from "react";
 import {exportMatchesToCSV} from "../hooks/useExport";
 import type {City, Match, MatchRestrictions, Referee, Team} from "../types";
 import {
@@ -264,6 +264,25 @@ const MatchForm: FC<MatchFormProps> = ({opened, onClose, editingMatch}) => {
         {value: 3, label: "Идет"}, {value: 4, label: "Запланирован"},
     ];
 
+    useEffect(() => {
+        if (editingMatch && opened) {
+            form.setValues({
+                teamGuestId: editingMatch.teamGuest?.id || null,
+                teamHostId: editingMatch.teamHost?.id || null,
+                refereeId: editingMatch.referee?.id || null,
+                cityId: editingMatch.city?.id || null,
+                stageType: editingMatch.stageType || 1,
+                phaseType: editingMatch.phaseType || 4,
+                guestCount: editingMatch.guestCount || 0,
+                hostCount: editingMatch.hostCount || 0,
+                dateTime: editingMatch.dateTime?.substring(0, 16) || "",
+            });
+        } else if (!opened) {
+            form.reset();
+        }
+    }, [editingMatch, opened]);
+
+
     return (
         <Modal opened={opened} onClose={onClose} title={isEditing ? "Редактировать матч" : "Добавить матч"} size="xl"
                centered>
@@ -349,6 +368,8 @@ const MatchCard: FC<MatchCardProps> = ({match, isAdmin, onEdit}) => {
         const colors: Record<number, string> = {1: "green", 2: "red", 3: "blue", 4: "yellow"};
         return colors[phaseType] || "gray";
     };
+
+
 
     return (
         <Card withBorder padding="lg" radius="md">
